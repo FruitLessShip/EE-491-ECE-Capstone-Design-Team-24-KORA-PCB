@@ -1,89 +1,263 @@
 #include <SPI.h>                // Serial monitor library
 #include <Wire.h>               // I2C library
+#include <OneWire.h>            // library to communicate with arduino
+#include <DallasTemperature.h>  // library for temp sensor
 #include <Adafruit_SSD1306.h>   // display library
 #include <Adafruit_GFX.h>       // display library
 #include <FastLED.h>            // LED library
-#define LED_PIN   23
-#define num_LED   2
+#define LED_PIN   32
+#define num_LED   14
+#define COIL 27
+#define RESET 7
+#define COIL2 30
+#define RESET2 36
+#define TCAADDR 0x70
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define DS1621_sensor 0X48
+#define ONE_WIRE 9 // DQ Wire connected to digital pin 9
 
-Adafruit_SSD1306 display(-1); // -1 for no reset pin
+Adafruit_SSD1306 display1(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+Adafruit_SSD1306 display2(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+Adafruit_SSD1306 display3(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+
+OneWire oneWire(ONE_WIRE);
+DallasTemperature DS18B20_Sensor(&oneWire);
+
+void TCA9548A(uint8_t i) {
+  if (i > 7) return;
+ 
+  Wire.beginTransmission(TCAADDR);
+  Wire.write(1 << i);
+  Wire.endTransmission();  
+}
+
 CRGB leds[num_LED]; // Define array for LEDs in strip
-float v_Source1[] = {0.00, 0.00}; // Contains voltage for both 3.3 [V] rails
-float v_Source2[] = {0.00, 0.00, 0.00}; // Contains voltage for all three 5 [V] rails
-float v_Source3[] = {0.00, 0.00}; // Contains voltage for both 0-12 [V] rails
-float shunt_Current1[] = {0.00, 0.00}; // Contains current for both 3.3 [V] rails
-float shunt_Current2[] = {0.00, 0.00, 0.00}; // Contains current for all three 5 [V] rails 
-float shunt_Current3[] = {0.00, 0.00}; // Contains current for both 0-12 [V] rails
+
+  float v_Resistance1[] = {990.00, 99.00, 990.00, 99.00}; // Use measured value of resistor in ohms. 1st and 2nd 3.3 [V] rail.
+  float v_Resistance2[] = {1500.00, 1000.00, 1500.00, 1000.00, 1500.00, 1000.00}; // Use measured value of resistor in ohms. 1st, 2nd and 3rd 5 [V] rail.
+  float v_Resistance3[] = {10800.00, 3600.00, 10800.00, 3600.00}; // Use measured value of resistor in ohms. 1st and 2nd 0-12 [V] rail.
+
+  float c_Resistance1[] = {0.04, 100.00, 14900.00, 0.04, 100.00, 14900.00}; // Use measured value of resistor in ohms. 1st and 2nd 3.3 [V] rail.  
+  float c_Resistance2[] = {0.002, 100.00, 29900.00, 0.002, 100.00, 29900.00, 0.002, 100.00, 29900.00}; // Use measured value of resistor in ohms. 1st, 2nd and 3rd 5 [V] rail.
+  float c_Resistance3[] = {0.05, 100.00, 5900.00, 0.05, 100.00, 5900.00}; // Use measured value of resistor in ohms. 1st and 2nd 0-12 [V] rail.
+
+  float v_Source1[] = {0.00, 0.00}; // Contains voltage for both 3.3 [V] rails
+  float v_Source2[] = {0.00, 0.00, 0.00}; // Contains voltage for all three 5 [V] rails
+  float v_Source3[] = {0.00, 0.00}; // Contains voltage for both 0-12 [V] rails
+  float shunt_Current1[] = {0.00, 0.00}; // Contains current for both 3.3 [V] rails
+  float shunt_Current2[] = {0.00, 0.00, 0.00}; // Contains current for all three 5 [V] rails 
+  float shunt_Current3[] = {0.00, 0.00}; // Contains current for both 0-12 [V] rails
+
+  const int buzzer = 10; //buzzer on digital pin 10
+  int WarnOne_A = 0; //Used to stop warning beep one from repeating with Ambient sensor
+  int WarnOne_C = 0; //Used to stop warning beep one from repeating with Onboard sensor
+  int WarnTwo_A = 0; //Used to stop warning beep two from repeating with Ambient sensor
+  int WarnTwo_C = 0; //Used to stop warning beep two from repeating with Onboard sensor
+
+  int Set = 0;
+  int Reset = 0;
+
 /*
 Setup function that initilize all pins and displays
 */
 void setup() {
+    
     //OLED display set-up code
-    Wire.setSCL(19); // Declare pin 19 as an SCL pin for I2C communications for OLED
-    Wire.setSDA(18); // Declare pin 18 as an SDA pin for I2C communications for OLED
-    display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize OLED with I2C address 0x3C
+    Wire.begin();
+    
+    pinMode(0, OUTPUT); 
+    digitalWrite(0, HIGH); 
+    pinMode(1, OUTPUT);
+    digitalWrite(1, HIGH);
+    pinMode(2, OUTPUT);
+    digitalWrite(2, HIGH);
+    pinMode(3, OUTPUT);
+    digitalWrite(3, HIGH);
+   
+    pinMode(RESET, INPUT);
+    pinMode(COIL, OUTPUT);
+    pinMode(RESET2, INPUT);
+    pinMode(COIL2, OUTPUT);
+    
+    pinMode(31, OUTPUT);
+    digitalWrite(31, HIGH);
+    
+    pinMode(buzzer, OUTPUT);    // set up pin as output for beeper
 
+    DS18B20_Sensor.begin(); //starts Dallas library
+
+ // Init OLED display on bus number 0 (display 1)
+  TCA9548A(0);
+  if(!display1.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for(;;);
+  } 
+  // Clear the buffer
+  display1.clearDisplay();
+
+  // Init OLED display on bus number 1
+  TCA9548A(1);
+  if(!display2.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for(;;);
+  } 
+  // Clear the buffer
+  display2.clearDisplay();
+
+ // Init OLED display on bus number 1
+  TCA9548A(7);
+  if(!display3.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for(;;);
+  } 
+  // Clear the buffer
+  display3.clearDisplay();
+
+  TCA9548A(2);
+  Wire.begin(); // begin I2C commuication
+  Wire.beginTransmission(DS1621_sensor);// connect to sensor
+  Wire.write(0xAC); // Set access configuration register
+  Wire.write(0);    // set for continuous conversion 
+  Wire.beginTransmission(DS1621_sensor); // restart 
+  Wire.write(0xEE);  // set for temperature conversion  
+  Wire.endTransmission(DS1621_sensor); // end transmission
+  delay(2000); // wait for sensor to stablize 
+    
     //LED set-up code
     FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, num_LED); // Define LEDS and set the digital pin to 0 and number of LEDS to 6
     
-    // Set pins to digital or analog
-    pinMode(1, OUTPUT); // Set pin 1 as an output pin
-    digitalWrite(1, HIGH); // Set pin 1 to high logic at 3.3 [V] 
-    pinMode(2, OUTPUT); // Set pin 2 as an output pin
-    digitalWrite(2, HIGH); // Set pin 2 to high logic at 3.3 [V]
-    pinMode(A0, INPUT); // Set pin 14 as an analog input, 3.3 [V] #1 
-    //pinMode(A6, INPUT); // Set pin 20 as an analog input, 3.3 [V] #2
-    //pinMode(A8, INPUT); // Set pin 22 as an analog input, 5 [V] #1
-    //pinMode(A10, INPUT); // Set pin 24 as an analog input, 5 [V] #2
-    //pinMode(A16, INPUT); // Set pin 40 as an analog input, 5 [V] #3
-    //pinMode(A14, INPUT); // Set pin 28 as an analog input, 0-12 [V] #1
-    //pinMode(A2, INPUT); // Set pin 16 as an analog input, 0-12 [V] #2
-    //pinMode(A1, INPUT); // Set pin 15 as an analog input, 3.3 [V] current #1
-    //pinMode(A7, INPUT); // Set pin 21 as an analog input, 3.3 [V] current #2
-    //pinMode(A9, INPUT); // Set pin 23 as an analog input, 5 [V] current #1
-    //pinMode(A11, INPUT); // Set pin 25 as an analog input, 5 [V] current #2
-    //pinMode(A17, INPUT); // Set pin 41 as an analog input, 5 [V] current #3
-    //pinMode(A15, INPUT); // Set pin 39 as an analog input, 0-12 [V] current #1
-    //pinMode(A3, INPUT); // Set pin 17 as an analog input, 0-12 [V] current #2 
+    // Set analog pins analog 
+    pinMode(A0, INPUT); // Set pin 14 as an analog input 
+    pinMode(A6, INPUT); // Set pin 20 as an analog input
+    pinMode(A8, INPUT); // Set pin 22 as an analog input
+    pinMode(A10, INPUT); // Set pin 24 as an analog input
+    pinMode(A16, INPUT); // Set pin 40 as an analog input
+    pinMode(A14, INPUT); // Set pin 38 as an analog input
+    pinMode(A2, INPUT); // Set pin 16 as an analog input
+    pinMode(A1, INPUT); // Set pin 15 as an analog input
+    pinMode(A7, INPUT); // Set pin 21 as an analog input
+    pinMode(A9, INPUT); // Set pin 23 as an analog input
+    pinMode(A11, INPUT); // Set pin 25 as an analog input
+    pinMode(A17, INPUT); // Set pin 41 as an analog input
+    pinMode(A15, INPUT); // Set pin 39 as an analog input
+    pinMode(A3, INPUT); // Set pin 17 as an analog input
     
+    digitalWrite(COIL, HIGH);
+    digitalWrite(COIL2, HIGH);
 }
 /*
 Main function that calls all other functions and loops until the microcontrollers reset button
 is pressed or power to the microcontroller is turned off
 */
 void loop() {
-    v_Source1[0] = readVoltage(A0, 979.00, 98.9); // Call readVoltage function with parameters for the 3.3 [V] rail and set equal to v_Source1[0]
-    //v_Source2[0] = readVoltage(, 1000.00, 1500.00); // Call readVoltage function with parameters for the 5 [V] rail and set equal to v_Source2[0]
-    //v_Source3[0] = readVoltage(, 10800.00, 3600.00); // Call readVoltage function with parameters for the 0-12 [V] rail and set equal to v_Source3[0]
-    //v_Source1[1] = readVoltage(A0, 979.00, 98.9); // Call readVoltage function with parameters for the 3.3 [V] rail and set equal to v_Source1[1]
-    //v_Source2[1] = readVoltage(, 1000.00, 1500.00); // Call readVoltage function with parameters for the 5 [V] rail and set equal to v_Source2[1]
-    //v_Source3[1] = readVoltage(, 10800.00, 3600.00); // Call readVoltage function with parameters for the 0-12 [V] rail and set equal to v_Source3[1]
-    //v_Source2[2] = readVoltage(, 1000.00, 1500.00); // Call readVoltage function with parameters for the 5 [V] rail and set equal to v_Source2[2]
-    //shunt_Current1[0] = readCurrent(, 0.04, 1000.00, 149000.00); // Call readCurrent function with parameters for the 3.3 [V] rail and set equal to shunt_Current1_1 
-    //shunt_Current2[0] = readCurrent(, 0.002, 1000.00, 299000.00); // Call readCurrent function with parameters for the 5 [V] rail and set equal to shunt_Current2_1
-    //shunt_Current3[0] = readCurrent(, 0.05, 1000.00, 59000.00); // Call readCurrent function with parameters for the 0-12 [V] rail and set equal to shunt_Current3_1
-    //shunt_Current1[1] = readCurrent(, 0.04, 1000.00, 149000.00); // Call readCurrent function with parameters for the 3.3 [V] rail and set equal to shunt_Current1_2 
-    //shunt_Current2[1] = readCurrent(, 0.002, 1000.00, 299000.00); // Call readCurrent function with parameters for the 5 [V] rail and set equal to shunt_Current2_2
-    //shunt_Current3[1] = readCurrent(, 0.05, 1000.00, 59000.00); // Call readCurrent function with parameters for the 0-12 [V] rail and set equal to shunt_Current3_2
-    //shunt_Current2[2] = readCurrent(, 0.002, 1000.00, 299000.00); // Call readCurrent function with parameters for the 5 [V] rail and set equal to shunt_Current2_3
-    displayVoltage(v_Source1[0], 5.00, 12.00); // Call displayVoltage function with V_source1 and two dummy inputs to display on the OLED
-    displayCurrent(0.5, 5.00, 1.00); // Call displayCurrent function with three dummy inputs to display on the OLED
-    LEDs(v_Source1[0], 0.5); // LEDs function that changes the RGB LEDs based on voltage and current of a specific rail
+    v_Source1[0] = readVoltage(A0, v_Resistance1[0], v_Resistance1[1]); // Call readVoltage function with parameters for the 3.3 [V] rail and set equal to v_Source1[0]
+    v_Source2[0] = readVoltage(A7, 1482.00, 980.00); // Call readVoltage function with parameters for the 5 [V] rail and set equal to v_Source2[0]
+    v_Source3[0] = readVoltage(A9, 1483.00, 4590.00); // Call readVoltage function with parameters for the 0-12 [V] rail and set equal to v_Source3[0]
+    
+    v_Source1[1] = readVoltage(A10, 985.00, 99.1); // Call readVoltage function with parameters for the 3.3 [V] rail and set equal to v_Source1[1]
+    v_Source2[1] = readVoltage(A14, 1472.00, 995.00); // Call readVoltage function with parameters for the 5 [V] rail and set equal to v_Source2[1]
+    v_Source3[1] = readVoltage(A17, 1480.00, 4600.00); // Call readVoltage function with parameters for the 0-12 [V] rail and set equal to v_Source3[1]
+    
+    v_Source2[2] = readVoltage(A11, 1471.00, 993.00); // Call readVoltage function with parameters for the 5 [V] rail and set equal to v_Source2[2]
+    
+    shunt_Current1[0] = readCurrent(A1, 10.00, 1000.00, 10000.00, v_Source1[0]); // Call readCurrent function with parameters for the 3.3 [V] rail and set equal to shunt_Current1_1 
+    shunt_Current2[0] = readCurrent(A8, 10.00, 1000.00, 10000.00, v_Source2[0]); // Call readCurrent function with parameters for the 5 [V] rail and set equal to shunt_Current2_1
+    shunt_Current3[0] = readCurrent(A6, 4.80, 989.00, 9910.00, v_Source3[0]); // Call readCurrent function with parameters for the 0-12 [V] rail and set equal to shunt_Current3_1
+    
+    shunt_Current1[1] = readCurrent(A16, 15.10, 989.00, 9950.00, v_Source1[1]); // Call readCurrent function with parameters for the 3.3 [V] rail and set equal to shunt_Current1_2 
+    shunt_Current2[1] = readCurrent(A2, 15.70, 992.00, 9970.00, v_Source2[1]); // Call readCurrent function with parameters for the 5 [V] rail and set equal to shunt_Current2_2
+    shunt_Current3[1] = readCurrent(A15, 15.40, 988.00, 10020.00, v_Source3[1]); // Call readCurrent function with parameters for the 0-12 [V] rail and set equal to shunt_Current3_2
+    
+    shunt_Current2[2] = readCurrent(A3, 6.3, 993.00, 10000.00, v_Source2[2]); // Call readCurrent function with parameters for the 5 [V] rail and set equal to shunt_Current2_3
+    
+    v_Source1[0] = v_Source1[0] - (shunt_Current1[0] * (10.00));
+    v_Source2[0] = v_Source2[0] - (shunt_Current2[0] * (10.00));
+    v_Source3[0] = v_Source3[0] - (shunt_Current3[0] * (5.00));
+    v_Source1[1] = v_Source1[1] - (shunt_Current1[1] * (15.10));
+    v_Source2[1] = v_Source2[1] - (shunt_Current2[1] * (15.70));
+    v_Source3[1] = v_Source3[1] - (shunt_Current3[1] * (15.40));
+    v_Source2[2] = v_Source2[2] - (shunt_Current2[2] * (1.00));
+    
+    // LEDs function that changes the RGB LEDs based on voltage and current of a specific rail
+    LEDs(v_Source1[0], shunt_Current1[0], v_Source2[0], shunt_Current2[0], v_Source3[0], shunt_Current3[0], v_Source1[1], shunt_Current1[1], v_Source2[1], shunt_Current2[1]);
+    LEDs2(v_Source3[1], shunt_Current3[1], v_Source2[2], shunt_Current2[2]); 
+    
+    if(shunt_Current1[0] < 1.00){
+        shunt_Current1[0] = shunt_Current1[0] * 1000.00;
+      }
+    if(shunt_Current2[0] < 1.00){
+        shunt_Current2[0] = shunt_Current2[0] * 1000.00;
+      }
+    if(shunt_Current3[0] < 1.00){
+        shunt_Current3[0] = shunt_Current3[0] * 1000.00;
+      }
+    if(shunt_Current1[1] < 1.00){
+        shunt_Current1[1] = shunt_Current1[1] * 1000.00;
+      }
+    if(shunt_Current2[1] < 1.00){
+        shunt_Current2[1] = shunt_Current2[1] * 1000.00;
+      }
+    if(shunt_Current3[1] < 1.00){
+        shunt_Current3[1] = shunt_Current3[1] * 1000.00;
+      }
+    if(shunt_Current2[2] < 1.00){
+        shunt_Current2[2] = shunt_Current2[2] * 1000.00;
+        }
+      
+    display_1(v_Source1[0], v_Source2[0], v_Source3[0], shunt_Current1[0], shunt_Current2[0], shunt_Current3[0]); 
+    display_2(v_Source1[1], v_Source2[1], v_Source3[1], v_Source2[2], shunt_Current1[1], shunt_Current2[1], shunt_Current3[1], shunt_Current2[2]);
+    
+    
+    
+    // Ambient Sensor Loop
+    float temp1 = sensor1();  // requests and returns ambient temp 
+    // Onboard Sensor Loop
+    float temp2 = sensor2();  // requests and returns onboard temp
+    // Checks temp1, temp2 for first warning beep
+    if((temp1 > 70.0) || (temp2 > 70.0)){
+    warning_One(temp1, temp2);
+    }
+    // Checks temp1, temp2 for second warning beep
+    if((temp1 > 75.0) || (temp2 > 75.0)){
+    warning_Two(temp1, temp2);
+    }
+    // Checks temp1, temp2 for continuous beep
+    if((temp1 > 80.0) || (temp2 > 80.0)){
+    continuous(temp1, temp2);
+    }
+   display_3Temp(temp1, temp2);
+
+   latch(shunt_Current3[0]);
+   latch2(shunt_Current3[1]);
 }
 /*
 Function that takes a pin number and two resistor values as inputs. Reads the voltage of that pin and calculates 
 the source voltage based on the voltage divider equation. Outputs the source voltage as a float.
 */
-float readVoltage(int pinNum, float R1, float R2){
-    int R_digital = analogRead(pinNum); // Read digital value at that pin
-    float R_voltage = (R_digital * 3.30)/1023.00; // Find the voltage at that pin based on read value
-    R_voltage = R_voltage - 0.07; // Offset due to ADC inaccuracy. Found experimently
-    float divider = (R2 + R1)/R1; // Calculate the multiplier for the voltage divider equation
-    float V_source = (R_voltage)*(divider); // Calculate the source voltage based on the divider and the read voltage
+float readVoltage(int pinNum, float R1, float R2){     
+     float V_temp = 0.00;
+     float V_source = 0.00;
+     for(int i = 0; i < 50; i++){
+      
+        int R_digital = analogRead(pinNum); // Read digital value at that pin
+        float R_voltage = (R_digital * 3.3)/1023.0000; // Find the voltage at that pin based on read value
+        float divider = (R2 + R1)/R1; // Calculate the multiplier for the voltage divider equation
+        V_source = (R_voltage)*(divider); // Calculate the source voltage based on the divider and the read voltage
+        V_temp = V_temp + V_source;   
+      }
+
+        V_source = V_temp/50;
+    
+    //int R_digital = analogRead(pinNum); // Read digital value at that pin
+    //float R_voltage = (R_digital * 3.30)/1023.00; // Find the voltage at that pin based on read value
+    //R_voltage = R_voltage - 0.02; // Offset due to ADC inaccuracy. Found experimently
+    //float divider = (R2 + R1)/R1; // Calculate the multiplier for the voltage divider equation
+    //float V_source = (R_voltage)*(divider); // Calculate the source voltage based on the divider and the read voltage
 
     if(V_source < 0.00){ // If V_source is less than 0 then set it equal to zero
         V_source = 0.00; // Necessary due to the offset value needed to display the correct voltage
-      }
+     }
 
     return V_source; // return V_source
   
@@ -92,84 +266,435 @@ float readVoltage(int pinNum, float R1, float R2){
 Function that takes a pin number and two resistor values as inputs. Reads the voltage of that pin and calculates 
 the source voltage based on the voltage divider equation. Outputs the source voltage as a float.
 */
-float readCurrent(int pinNum, float R_shunt, float R1, float R2){
-    int V_outDigital = analogRead(pinNum); // Read digital value at that pin
-    float V_out = (V_outDigital * 3.30)/1023.00; // Find the voltage at that pin based on read value
-    V_out = V_out - 0.07; // Offset due to ADC inaccuracy. Found experimently
-    float V_shunt = V_out/(1+R2/R1); // Op amp non-inverting gain equation
-    float shunt_Current = V_shunt/R_shunt ; // Calculate current based on Ohm's law
+float readCurrent(int pinNum, float R_shunt, float R1, float R2, float voltage){
 
-    if(shunt_Current < 0.00){ // If shunt_Current is less than 0 then set it equal to zero
-        shunt_Current = 0.00; // Necessary due to the offset value needed to display the correct current
+     float I_temp = 0.00;
+     float shunt_Current = 0.00;
+     for(int i = 0; i < 50; i++){
+      
+        int R_digital = analogRead(pinNum); // Read digital value at that pin
+        float R_voltage = (R_digital * 3.3)/1023.00; // Find the voltage at that pin based on read value
+        float V_shunt = R_voltage/(1+R2/R1); // Op amp non-inverting gain equation
+        float shunt_Current = V_shunt/R_shunt ; // Calculate current based on Ohm's law
+        I_temp = I_temp + shunt_Current;   
       }
 
+        shunt_Current = I_temp/50;
+
+    if((shunt_Current < 0.00005) || (voltage == 0.00)){ // If shunt_Current is less than 0 then set it equal to zero
+       shunt_Current = 0.00; // Necessary due to the offset value needed to display the correct current
+     }
+      
+    //if(shunt_Current < 1.00){
+     // shunt_Current = shunt_Current*(1000.0000); // Display in milliAmps
+    //}
+   
     return shunt_Current; // return shunt_Current
   
   }
 /*
 Function that takes three float values and displays them on the OLED display
 */
-void displayVoltage(float voltage1, float voltage2, float voltage3){
-    display.clearDisplay(); // clear the display
-    display.setTextSize(1); // set text size 1 to 8
-    display.setTextColor(WHITE); // set text color to white
-    display.setCursor(0,0); // set cursor postion 
-    display.println("Voltage"); // print on screen
-    display.setCursor(0,8); // set cursor postion
-    display.println("1:"); // print on screen
-    display.setCursor(0,16); // set cursor postion
-    display.println("2:"); // print on screen
-    display.setCursor(0,24); // set cursor postion
-    display.println("3:");  // print on screen
-    display.setCursor(12,8); // set cursor postion
-    display.println(voltage1); // print voltage 1 on screen
-    display.setCursor(12,16); // set cursor postion
-    display.println(voltage2); // print voltage 2 on screen
-    display.setCursor(12,24); // set cursor postion
-    display.println(voltage3); // print voltage 3 on screen
+void display_1(float voltage1, float voltage2, float voltage3, float current1, float current2, float current3){
+    TCA9548A(0);
+    display1.clearDisplay();
+    display1.setTextSize(1); // set text size 1 to 8
+    display1.setTextColor(WHITE); // set text color to white
+    display1.setCursor(0,0); // set cursor postion 
+    display1.println("Voltage:"); // print on screen
+    display1.setCursor(0,8); // set cursor postion
+    display1.println("1:"); // print on screen
+    display1.setCursor(0,16); // set cursor postion
+    display1.println("2:"); // print on screen
+    display1.setCursor(0,24); // set cursor postion
+    display1.println("3:");  // print on screen
+    display1.setCursor(12,8); // set cursor postion
+    display1.println(voltage1); // print voltage 1 on screen
+    display1.setCursor(12,16); // set cursor postion
+    display1.println(voltage2); // print voltage 2 on screen
+    display1.setCursor(12,24); // set cursor postion
+    display1.println(voltage3); // print voltage 3 on screen
+    display1.setCursor(64,0); // set cursor postion 
+    display1.println("Current:"); // print on screen
+    display1.setCursor(64,8); // set cursor postion
+    display1.println("1:"); // print on screen
+    display1.setCursor(64,16); // set cursor postion
+    display1.println("2:"); // print on screen
+    display1.setCursor(64,24); // set cursor postion
+    display1.println("3:");  // print on screen
+    display1.setCursor(76,8); // set cursor postion
+    display1.println(current1); // print voltage 1 on screen
+    display1.setCursor(76,16); // set cursor postion
+    display1.println(current2); // print voltage 2 on screen
+    display1.setCursor(76,24); // set cursor postion
+    display1.println(current3); // print voltage 3 on screen
+    display1.display();
+  }
+
+void display_2(float voltage1, float voltage2, float voltage3, float voltage4, float current1, float current2, float current3, float current4){
+    TCA9548A(1);
+    display2.clearDisplay();
+    display2.setTextSize(1); // set text size 1 to 8
+    display2.setTextColor(WHITE); // set text color to white
+    display2.setCursor(0,0); // set cursor postion 
+    display2.println("Voltage:"); // print on screen
+    display2.setCursor(0,8); // set cursor postion
+    display2.println("1:"); // print on screen
+    display2.setCursor(0,16); // set cursor postion
+    display2.println("2:"); // print on screen
+    display2.setCursor(0,24); // set cursor postion
+    display2.println("3:");  // print on screen
+    display2.setCursor(0,32); // set cursor postion
+    display2.println("4:");  // print on screen
+    display2.setCursor(12,8); // set cursor postion
+    display2.println(voltage1); // print voltage 1 on screen
+    display2.setCursor(12,16); // set cursor postion
+    display2.println(voltage2); // print voltage 2 on screen
+    display2.setCursor(12,24); // set cursor postion
+    display2.println(voltage3); // print voltage 3 on screen
+    display2.setCursor(12,32); // set cursor postion
+    display2.println(voltage4); // print voltage 3 on screen
+    display2.setCursor(64,0); // set cursor postion 
+    display2.println("Current:"); // print on screen
+    display2.setCursor(64,8); // set cursor postion
+    display2.println("1:"); // print on screen
+    display2.setCursor(64,16); // set cursor postion
+    display2.println("2:"); // print on screen
+    display2.setCursor(64,24); // set cursor postion
+    display2.println("3:");  // print on screen
+    display2.setCursor(64,32); // set cursor postion
+    display2.println("3:");  // print on screen
+    display2.setCursor(76,8); // set cursor postion
+    display2.println(current1); // print voltage 1 on screen
+    display2.setCursor(76,16); // set cursor postion
+    display2.println(current2); // print voltage 2 on screen
+    display2.setCursor(76,24); // set cursor postion
+    display2.println(current3); // print voltage 3 on screen
+    display2.setCursor(76,32); // set cursor postion
+    display2.println(current4); // print voltage 3 on screen
+    display2.display();
     
   }
-/*
-Function that takes three float values and displays them on the OLED display
-*/
-void displayCurrent(float current1, float current2, float current3){
-    display.setTextSize(1); // set text size 1 to 8
-    display.setTextColor(WHITE); // set text color to white
-    display.setCursor(48,0); // set cursor postion 
-    display.println("Current"); // print on screen
-    display.setCursor(48,8); // set cursor postion
-    display.println("1:"); // print on screen
-    display.setCursor(48,16); // set cursor postion
-    display.println("2:"); // print on screen
-    display.setCursor(48,24); // set cursor postion
-    display.println("3:");  // print on screen
-    display.setCursor(60,8); // set cursor postion
-    display.println(current1); // print current 1 on screen
-    display.setCursor(60,16); // set cursor postion
-    display.println(current2); // print current 2 on screen
-    display.setCursor(60,24); // set cursor postion
-    display.println(current3); // print current 3 on screen
-    display.display(); // Display 
+  
+void display_3Temp(float amb_Temp, float board_Temp){
+    TCA9548A(7);
+    display3.clearDisplay();
+    display3.setTextSize(1); // set text size 1 to 8
+    display3.setTextColor(WHITE); // set text color to white
+    display3.setCursor(0,0); // set cursor postion 
+    display3.println("Amb Temp:"); // print on screen
+    display3.setCursor(0,8); // set cursor postion
+    display3.println(amb_Temp); // print voltage 1 on screen
+    display3.setCursor(0,16); // set cursor postion 
+    display3.println("Onboard Temp:"); // print on screen
+    display3.setCursor(0,24); // set cursor postion
+    display3.println(board_Temp); // print voltage 1 on screen
+    display3.display();
   }
 
-void LEDs(float voltage, float current){
-  //rail 1: 3.3V @ 0.5A
-   if((voltage >= 3.135) && (voltage <= 3.465)) //if measured voltage value is within 5% of 3.3V
-      leds[0] = CRGB (255, 0, 255); //glow green
-   else
-   if(voltage > 3.465) //if it's too high
-      leds[0] = CRGB (0, 255, 255); //glow red
-   else
-   if(voltage < 3.135) //if it's too low
-      leds[0] = CRGB (255, 255, 0); //glow blue
+  
 
-   if((current >= 0.475) && (current <= 0.525)) //if measured current value is within 5% of 0.5A
+void LEDs(float voltage1, float current1, float voltage2, float current2, float voltage3, float current3, float voltage4, float current4, float voltage5, float current5){
+  //rail 1: 3.3V @ 0.5A
+   if((voltage1 >= 3.135) && (voltage1 <= 3.465)) //if measured voltage value is within 5% of 3.3V
+      leds[0] = CRGB (255, 0, 255); //glow green
+      else
+   if(voltage1 > 3.465) //if it's too high
+      leds[0] = CRGB (0, 255, 255); //glow red
+      else
+   if((voltage1 >= 0.01) && (voltage1 < 3.135)) //if it's too low
+      leds[0] = CRGB (255, 255, 0); //glow blue
+      else
+   if(voltage1 < 0.01) //if it's too low
+      leds[0] = CRGB (127, 255, 127); //glow purple
+      
+   if(current1 < 0.001) //if measured current value is less than 1 mA
+      leds[1] = CRGB (127, 255, 127); //glow purple
+      else
+   if((current1 >= 0.001) && (current1 < 525)) //if measured current value is within 5% of 0.5A
       leds[1] = CRGB (255, 0, 255); //glow green
    else
-   if(current > 0.525) //if it's too high
+   if(current1 >= 525) //if it's too high
       leds[1] = CRGB (0, 255, 255); //glow red
-     
+
+      //rail 2: 5V @ 5A
+   if((voltage2 >= 4.975) && (voltage2 <= 5.1)) //if measured voltage value is within 5% of 3.3V
+      leds[2] = CRGB (255, 0, 255); //glow green
+      else
+   if(voltage2 > 5.1) //if it's too high                                                                Change Later
+      leds[2] = CRGB (0, 255, 255); //glow red
+      else
+   if((voltage2 >= 0.01) && (voltage2 < 4.975)) //if it's too low
+      leds[2] = CRGB (255, 255, 0); //glow blue
+      
+   if(voltage2 < 0.01) //if it's zero
+      leds[2] = CRGB (127, 255, 127); //glow purple
+      
+   if(current2 < 0.001) //if measured current value is less than 1 mA
+      leds[3] = CRGB (127, 255, 127); //glow purple
+      else
+   if((current2 >= 0.001) && (current2 < 5050)) //if measured current value is within 5% of 0.5A
+      leds[3] = CRGB (255, 0, 255); //glow green
+      else
+   if(current2 >= 5050) //if it's too high
+      leds[3] = CRGB (0, 255, 255); //glow red
+
+//rail 3: 0-12V @ 1A
+   if((voltage3 >= 0.01) && (voltage3 <= 12.2)) //if measured voltage value is within 5% of 3.3V
+      leds[4] = CRGB (255, 0, 255); //glow green
+      else
+   if(voltage3 > 12.2) //if it's too high                                                                Change Later
+      leds[4] = CRGB (0, 255, 255); //glow red
+      else
+   if(voltage3 < 0.001) //if it's too low
+      leds[4] = CRGB (127, 255, 127); //glow purple
+        
+   if(current3 < 0.001) //if measured current value is less than 1 mA
+      leds[5] = CRGB (127, 255, 127); //glow purple
+      else
+   if((current3 >= 0.001) && (current3 < 1000)) //if measured current value is within 5% of 0.5A           Change Later
+      leds[5] = CRGB (255, 0, 255); //glow green
+      else
+   if(current3 >= 1000) //if it's too high
+      leds[5] = CRGB (0, 255, 255); //glow red
+
+   //rail 4: 3.3V @ 0.5A
+   if((voltage4 >= 3.135) && (voltage4 <= 3.465)) //if measured voltage value is within 5% of 3.3V
+      leds[6] = CRGB (255, 0, 255); //glow green
+      else
+   if(voltage4 > 3.465) //if it's too high
+      leds[6] = CRGB (0, 255, 255); //glow red
+      else
+   if((voltage4 >= 0.001) && (voltage4 < 3.135)) //if it's too low
+      leds[6] = CRGB (255, 255, 0); //glow blue
+      else
+   if(voltage4 < 0.001) //if it's too low
+      leds[6] = CRGB (127, 255, 127); //glow purple
+   if(current4 < 0.001) //if measured current value is less than 1 mA
+      leds[7] = CRGB (127, 255, 127); //glow purple
+      else
+   if((current4 >= 0.001) && (current4 < 525)) //if measured current value is within 5% of 0.5A
+      leds[7] = CRGB (255, 0, 255); //glow green
+   else
+   if(current4 >= 525) //if it's too high
+      leds[7] = CRGB (0, 255, 255); //glow red
+
+   //rail 5: 5V @ 5A
+   if((voltage5 >= 4.975) && (voltage5 <= 5.1)) //if measured voltage value is within 5% of 3.3V
+      leds[8] = CRGB (255, 0, 255); //glow green
+      else
+   if(voltage5 > 5.1) //if it's too high                                                                Change Later
+      leds[8] = CRGB (0, 255, 255); //glow red
+      else
+   if((voltage5 >= 0.01) && (voltage5 < 4.975)) //if it's too low
+      leds[8] = CRGB (255, 255, 0); //glow blue
+      
+   if(voltage5 < 0.001) //if it's zero
+      leds[8] = CRGB (127, 255, 127); //glow purple
+      
+   if(current5 < 0.001) //if measured current value is less than 1 mA
+      leds[9] = CRGB (127, 255, 127); //glow purple
+      else
+   if((current5 >= 0.001) && (current5 < 5050)) //if measured current value is within 5% of 0.5A
+      leds[9] = CRGB (255, 0, 255); //glow green
+      else
+   if(current5 >= 5050) //if it's too high
+      leds[9] = CRGB (0, 255, 255); //glow red
+  
    FastLED.show();
   }
+
+void LEDs2(float voltage1, float current1, float voltage2, float current2){
+//rail 6: 0-12V @ 1A
+   if((voltage1 >= 0.01) && (voltage1 <= 12.2)) //if measured voltage value is within 5% of 3.3V
+      leds[10] = CRGB (255, 0, 255); //glow green
+      else
+   if(voltage1 > 12.2) //if it's too high                                                                Change Later
+      leds[10] = CRGB (0, 255, 255); //glow red
+      else
+   if(voltage1 < 0.01) //if it's too low
+      leds[10] = CRGB (127, 255, 127); //glow purple
+        
+   if(current1 < 0.001) //if measured current value is less than 1 mA
+      leds[11] = CRGB (127, 255, 127); //glow purple
+      else
+   if((current1 >= 0.001) && (current1 < 1000)) //if measured current value is within 5% of 0.5A           Change Later
+      leds[11] = CRGB (255, 0, 255); //glow green
+      else
+   if(current1 >= 1000) //if it's too high
+      leds[11] = CRGB (0, 255, 255); //glow red
+
+    //rail 7: 5V @ 5A
+   if((voltage2 >= 4.975) && (voltage2 <= 5.1)) //if measured voltage value is within 5% of 3.3V
+      leds[12] = CRGB (255, 0, 255); //glow green
+      else
+   if(voltage2 > 5.1) //if it's too high                                                                Change Later
+      leds[12] = CRGB (0, 255, 255); //glow red
+      else
+   if((voltage2 >= 0.01) && (voltage2 < 4.975)) //if it's too low
+      leds[12] = CRGB (255, 255, 0); //glow blue
+      
+   if(voltage2 < 0.001) //if it's zero
+      leds[12] = CRGB (127, 255, 127); //glow purple
+      
+   if(current2 < 0.001) //if measured current value is less than 1 mA
+      leds[13] = CRGB (127, 255, 127); //glow purple
+      else
+   if((current2 >= 0.001) && (current2 < 5050)) //if measured current value is within 5% of 0.5A
+      leds[13] = CRGB (255, 0, 255); //glow green
+      else
+   if(current2 >= 5050) //if it's too high
+      leds[13] = CRGB (0, 255, 255); //glow red
+   FastLED.show();
+}
+
+// Ambient Sensor (1) Function 
+// request ambient temp and returns as float
+// can remove serial print funcs for final prep
+float sensor1(){
+  DS18B20_Sensor.requestTemperatures(); // request temp1 data
+  float temp1 = DS18B20_Sensor.getTempCByIndex(0); // 0 refers to first IC on wire - can have multiple DS18B20 on same bus
+  return temp1;
+}
+
+// Onboard Sensor (2) Function
+// request pcb temp and returns as float
+// can remove serial print functions for final prep
+float sensor2(){
+  TCA9548A(2);
+  Wire.beginTransmission(DS1621_sensor);  // connect to sensor
+  Wire.write(0xAA); // read temperature 
+  Wire.endTransmission(false); // send repeated start condition
+  Wire.requestFrom(DS1621_sensor, 2); // request 2 bytes from sensor
+  float temp2 = Wire.read();
+  return temp2; 
+}
+
+// Warning 1 Function
+// will set a warning beep if either sensor measures higher than 70C.
+// Change temporary values used for testing for final prep
+void warning_One(float temp1, float temp2){
+  //Warning beep one at 70.0 C for ambient sensor
+  if ((temp1 >= 70.0) && WarnOne_A == 0) //quick warning beep when ambient temp reaches 70.0 C
+  {
+    tone(buzzer, 1000); //beep
+    delay(1000); //keep beeping
+    noTone(buzzer); // beeping stops
+    WarnOne_A = 1; //prevents this from going off while temperature is lowering back below 70.0 C
+  }
+  if (temp1 < 70.0) //if ambient temp goes back below 70.0 C, reset warning beep condition
+    WarnOne_A = 0;
+  //Warning beep one at 70.0 C for onboard sensor
+  if ((temp2 >= 70.0) && WarnOne_C == 0) //quick warning beep when onboard temp reaches 70.0 C
+  {
+    tone(buzzer, 1200); //beep
+    delay(1000); //keep beeping
+    noTone(buzzer); // beeping stops
+    WarnOne_C = 1; //prevents this from going off while temperature is lowering back below 70.0 C
+  }
+  if (temp2 < 70.0) //if onboard temp goes back below 70.0 C, reset warning beep condition
+    WarnOne_C = 0;
+}
+
+// Second Warning Function
+// will beep twice if either sensor measures over 75C.
+// change temporary values used for testing for final prep
+void warning_Two(float temp1, float temp2){
+  if ((temp1 >= 75.0) && WarnTwo_A == 0) //quick warning beep when ambient temp reaches 75.0 C
+  {
+    tone(buzzer, 2000); //beep one
+    delay(500); //keep beeping
+    noTone(buzzer); //shut up
+    delay(250); //keep silent
+    tone(buzzer, 2000); //beep two
+    delay(500); //keep beeping
+    noTone(buzzer); //shut up
+    WarnTwo_A = 1; //prevents this from going off while temperature is lowering back below 75.0 C 
+  }
+  if (temp1 < 75.0) //if ambient temp goes back below 75.0 C, reset warning beep condition
+    WarnTwo_A = 0;
+  //Warning beep two at 75.0 C for onboard sensor
+  if ((temp2 >= 75.0) && WarnTwo_C == 0) //quick warning beep when onboard temp reaches 75.0 C
+  {
+    tone(buzzer, 2200); //beep one
+    delay(500); //keep beeping
+    noTone(buzzer); //shut up
+    delay(250); //keep silent
+    tone(buzzer, 2200); //beep two
+    delay(500); //keep beeping
+    noTone(buzzer); //shut up
+    WarnTwo_C = 1; //prevents this from going off while temperature is lowering back below 75.0 C 
+  }
+  if (temp2 < 75.0) //if onboard temp goes back below 75.0 C, reset warning beep condition
+    WarnTwo_C = 0;
+}
+
+// Continuous beeping until both temperatures return below 80.0 C // 
+// Change temporary values for final prep                         
+void continuous(float temp1, float temp2){
+
+  if (temp1 >= 80.0 || temp2 >= 80.0) //if either measured temp is above 80.0 C     
+  {
+    tone(buzzer, 2400); //scream
+    delay(450); //keep screaming
+    noTone(buzzer); // stop beeping
+    delay(450); // no beepng
+  }
+      else //both temps are below threshold
+        noTone(buzzer); // stop beeping
+}
+
+void latch(float current){
+
+  Reset = digitalRead(RESET);
+  
+  if(current < 10.00){ 
+    Set = 0;
+    }
+    
+  else if(current >= 10.00){
+    Set = 1;
+    }
+  Serial.print("Set: ");
+  Serial.println(Set);
+  Serial.print("Reset: ");
+  Serial.println(Reset);
+
+  if ((Set == 0) && (Reset == 1)){
+   digitalWrite(COIL, HIGH);} // Turn on coil if it was off and if the reset button was pushed
+  else if ((Set == 1) && (Reset == 0)){
+   digitalWrite(COIL, LOW);} // Turn off coil if current is too high
+  else if ((Set == 1) && (Reset == 1)){
+   digitalWrite(COIL, LOW);} // Turn off coil if current is too high and reset is pressed
+  
+  }
+
+void latch2(float current){
+
+  Reset = digitalRead(RESET2);
+  
+  if(current < 10.00){ 
+    Set = 0;
+    }
+    
+  else if(current >= 10.00){
+    Set = 1;
+    }
+  Serial.print("Set: ");
+  Serial.println(Set);
+  Serial.print("Reset: ");
+  Serial.println(Reset);
+
+  if ((Set == 0) && (Reset == 1)){
+   digitalWrite(COIL2, HIGH);} // Turn on coil if it was off and if the reset button was pushed
+  else if ((Set == 1) && (Reset == 0)){
+   digitalWrite(COIL2, LOW);} // Turn off coil if current is too high
+  else if ((Set == 1) && (Reset == 1)){
+   digitalWrite(COIL2, LOW);} // Turn off coil if current is too high and reset is pressed
+  
+  }
+
+
+
 
   
