@@ -5,25 +5,29 @@
 #include <Adafruit_SSD1306.h>   // display library
 #include <Adafruit_GFX.h>       // display library
 #include <FastLED.h>            // LED library
-#define LED_PIN   32
-#define num_LED   14
-#define COIL 27
-#define RESET 7
-#define COIL2 30
-#define RESET2 36
-#define TCAADDR 0x70
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define DS1621_sensor 0X48
-#define ONE_WIRE 9 // DQ Wire connected to digital pin 9
+#define LED_PIN   32            // Declare LED_PIN as pin 32
+#define num_LED   14            // Declare the number of LEDs as 14
+#define COIL 27                 // Declare COIL as pin 27
+#define RESET                   // Declare LED_PIN as pin 32
+#define COIL2 30                // Declare LED_PIN as pin 32
+#define RESET2 36               // Declare LED_PIN as pin 32
+#define TCAADDR 0x70            // Address for I2C multiplexor
+#define SCREEN_WIDTH 128        // Width of OLED display
+#define SCREEN_HEIGHT 64        // Height of OLED display
+#define DS1621_sensor 0X48      // Address of Temp sensor
+#define ONE_WIRE 9              // DQ Wire connected to digital pin 9
 
-Adafruit_SSD1306 display1(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
-Adafruit_SSD1306 display2(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
-Adafruit_SSD1306 display3(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+Adafruit_SSD1306 display1(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1); // Setup for Display 1
+Adafruit_SSD1306 display2(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1); // Setup for Display 2
+Adafruit_SSD1306 display3(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1); // Setup for Display 3
 
-OneWire oneWire(ONE_WIRE);
-DallasTemperature DS18B20_Sensor(&oneWire);
+OneWire oneWire(ONE_WIRE); // Setup for Temp sensor
+DallasTemperature DS18B20_Sensor(&oneWire); // Setup for Temp sensor
 
+/*
+Function for change between the different ports of the multiplexor. 
+Ex. TCA9548A(0) will let you talk to port 0 of the multiplexor.
+*/
 void TCA9548A(uint8_t i) {
   if (i > 7) return;
  
@@ -55,33 +59,32 @@ CRGB leds[num_LED]; // Define array for LEDs in strip
   int WarnTwo_A = 0; //Used to stop warning beep two from repeating with Ambient sensor
   int WarnTwo_C = 0; //Used to stop warning beep two from repeating with Onboard sensor
 
-  int Set = 0;
-  int Reset = 0;
+  int Set = 0; // Needed for the latch functions
+  int Reset = 0; // Needed for the latch functions
 
 /*
 Setup function that initilize all pins and displays
 */
 void setup() {
     
-    //OLED display set-up code
-    Wire.begin();
+    Wire.begin(); // Begin I2C communications
     
-    pinMode(0, OUTPUT); 
-    digitalWrite(0, HIGH); 
-    pinMode(1, OUTPUT);
-    digitalWrite(1, HIGH);
-    pinMode(2, OUTPUT);
-    digitalWrite(2, HIGH);
-    pinMode(3, OUTPUT);
-    digitalWrite(3, HIGH);
+    pinMode(0, OUTPUT); // Set pin 0 as an output
+    digitalWrite(0, HIGH); // Set pin 0 high
+    pinMode(1, OUTPUT); // Set pin 1 as an output
+    digitalWrite(1, HIGH); // Set pin 1 high
+    pinMode(2, OUTPUT); // Set pin 2 as an output
+    digitalWrite(2, HIGH); // Set pin 2 high
+    pinMode(3, OUTPUT); // Set pin 3 as an output
+    digitalWrite(3, HIGH); // Set pin 3 high
    
-    pinMode(RESET, INPUT);
-    pinMode(COIL, OUTPUT);
-    pinMode(RESET2, INPUT);
-    pinMode(COIL2, OUTPUT);
+    pinMode(RESET, INPUT);  // Set RESET pin as an input
+    pinMode(COIL, OUTPUT);  // Set COIL pin as an output
+    pinMode(RESET2, INPUT); // Set RESET2 pin as an input
+    pinMode(COIL2, OUTPUT); // Set COIL2 as an output
     
-    pinMode(31, OUTPUT);
-    digitalWrite(31, HIGH);
+    pinMode(31, OUTPUT); // Set pin 31 as an output
+    digitalWrite(31, HIGH); // Set pin 31 high
     
     pinMode(buzzer, OUTPUT);    // set up pin as output for beeper
 
@@ -114,7 +117,7 @@ void setup() {
   // Clear the buffer
   display3.clearDisplay();
 
-  TCA9548A(2);
+  TCA9548A(2); // Switch to temp sensor
   Wire.begin(); // begin I2C commuication
   Wire.beginTransmission(DS1621_sensor);// connect to sensor
   Wire.write(0xAC); // Set access configuration register
@@ -143,8 +146,8 @@ void setup() {
     pinMode(A15, INPUT); // Set pin 39 as an analog input
     pinMode(A3, INPUT); // Set pin 17 as an analog input
     
-    digitalWrite(COIL, HIGH);
-    digitalWrite(COIL2, HIGH);
+    digitalWrite(COIL, HIGH); // Set COIL pin high
+    digitalWrite(COIL2, HIGH); // Set COIL2 pin high
 }
 /*
 Main function that calls all other functions and loops until the microcontrollers reset button
@@ -170,8 +173,9 @@ void loop() {
     shunt_Current3[1] = readCurrent(A15, 15.40, 988.00, 10020.00, v_Source3[1]); // Call readCurrent function with parameters for the 0-12 [V] rail and set equal to shunt_Current3_2
     
     shunt_Current2[2] = readCurrent(A3, 6.3, 993.00, 10000.00, v_Source2[2]); // Call readCurrent function with parameters for the 5 [V] rail and set equal to shunt_Current2_3
-    
-    v_Source1[0] = v_Source1[0] - (shunt_Current1[0] * (10.00));
+
+    // Correction factor to the voltage of the load based on the shunt resistors voltage
+    v_Source1[0] = v_Source1[0] - (shunt_Current1[0] * (10.00)); 
     v_Source2[0] = v_Source2[0] - (shunt_Current2[0] * (10.00));
     v_Source3[0] = v_Source3[0] - (shunt_Current3[0] * (5.00));
     v_Source1[1] = v_Source1[1] - (shunt_Current1[1] * (15.10));
@@ -182,7 +186,8 @@ void loop() {
     // LEDs function that changes the RGB LEDs based on voltage and current of a specific rail
     LEDs(v_Source1[0], shunt_Current1[0], v_Source2[0], shunt_Current2[0], v_Source3[0], shunt_Current3[0], v_Source1[1], shunt_Current1[1], v_Source2[1], shunt_Current2[1]);
     LEDs2(v_Source3[1], shunt_Current3[1], v_Source2[2], shunt_Current2[2]); 
-    
+
+    // if current is less than 1 amp then change units to milliamps
     if(shunt_Current1[0] < 1.00){
         shunt_Current1[0] = shunt_Current1[0] * 1000.00;
       }
@@ -204,7 +209,8 @@ void loop() {
     if(shunt_Current2[2] < 1.00){
         shunt_Current2[2] = shunt_Current2[2] * 1000.00;
         }
-      
+
+    // Call display functions to display on the OLEDs
     display_1(v_Source1[0], v_Source2[0], v_Source3[0], shunt_Current1[0], shunt_Current2[0], shunt_Current3[0]); 
     display_2(v_Source1[1], v_Source2[1], v_Source3[1], v_Source2[2], shunt_Current1[1], shunt_Current2[1], shunt_Current3[1], shunt_Current2[2]);
     
@@ -226,8 +232,10 @@ void loop() {
     if((temp1 > 80.0) || (temp2 > 80.0)){
     continuous(temp1, temp2);
     }
+   // Display the temperature on the third OLED
    display_3Temp(temp1, temp2);
 
+   // Functions to turn the relay on and off for the 0-12 [V] rails 
    latch(shunt_Current3[0]);
    latch2(shunt_Current3[1]);
 }
@@ -236,8 +244,10 @@ Function that takes a pin number and two resistor values as inputs. Reads the vo
 the source voltage based on the voltage divider equation. Outputs the source voltage as a float.
 */
 float readVoltage(int pinNum, float R1, float R2){     
-     float V_temp = 0.00;
-     float V_source = 0.00;
+     float V_temp = 0.00; //Temp variable
+     float V_source = 0.00; // return variable
+
+     // read the voltage at the analog pin 50 times and average the value
      for(int i = 0; i < 50; i++){
       
         int R_digital = analogRead(pinNum); // Read digital value at that pin
@@ -247,16 +257,10 @@ float readVoltage(int pinNum, float R1, float R2){
         V_temp = V_temp + V_source;   
       }
 
-        V_source = V_temp/50;
-    
-    //int R_digital = analogRead(pinNum); // Read digital value at that pin
-    //float R_voltage = (R_digital * 3.30)/1023.00; // Find the voltage at that pin based on read value
-    //R_voltage = R_voltage - 0.02; // Offset due to ADC inaccuracy. Found experimently
-    //float divider = (R2 + R1)/R1; // Calculate the multiplier for the voltage divider equation
-    //float V_source = (R_voltage)*(divider); // Calculate the source voltage based on the divider and the read voltage
+        V_source = V_temp/50; // Average value
 
     if(V_source < 0.00){ // If V_source is less than 0 then set it equal to zero
-        V_source = 0.00; // Necessary due to the offset value needed to display the correct voltage
+        V_source = 0.00; 
      }
 
     return V_source; // return V_source
@@ -268,8 +272,8 @@ the source voltage based on the voltage divider equation. Outputs the source vol
 */
 float readCurrent(int pinNum, float R_shunt, float R1, float R2, float voltage){
 
-     float I_temp = 0.00;
-     float shunt_Current = 0.00;
+     float I_temp = 0.00; // Temp variable 
+     float shunt_Current = 0.00; // Return Variable
      for(int i = 0; i < 50; i++){
       
         int R_digital = analogRead(pinNum); // Read digital value at that pin
@@ -279,21 +283,17 @@ float readCurrent(int pinNum, float R_shunt, float R1, float R2, float voltage){
         I_temp = I_temp + shunt_Current;   
       }
 
-        shunt_Current = I_temp/50;
+        shunt_Current = I_temp/50; // Average Value
 
     if((shunt_Current < 0.00005) || (voltage == 0.00)){ // If shunt_Current is less than 0 then set it equal to zero
-       shunt_Current = 0.00; // Necessary due to the offset value needed to display the correct current
+       shunt_Current = 0.00; 
      }
-      
-    //if(shunt_Current < 1.00){
-     // shunt_Current = shunt_Current*(1000.0000); // Display in milliAmps
-    //}
    
     return shunt_Current; // return shunt_Current
   
   }
 /*
-Function that takes three float values and displays them on the OLED display
+Function that takes six float values and displays them on OLED display 1
 */
 void display_1(float voltage1, float voltage2, float voltage3, float current1, float current2, float current3){
     TCA9548A(0);
@@ -330,7 +330,9 @@ void display_1(float voltage1, float voltage2, float voltage3, float current1, f
     display1.println(current3); // print voltage 3 on screen
     display1.display();
   }
-
+/*
+Function that takes six float values and displays them on OLED display 2
+*/
 void display_2(float voltage1, float voltage2, float voltage3, float voltage4, float current1, float current2, float current3, float current4){
     TCA9548A(1);
     display2.clearDisplay();
@@ -375,7 +377,9 @@ void display_2(float voltage1, float voltage2, float voltage3, float voltage4, f
     display2.display();
     
   }
-  
+/*
+Function that takes two float values and displays them on OLED display 3
+*/
 void display_3Temp(float amb_Temp, float board_Temp){
     TCA9548A(7);
     display3.clearDisplay();
@@ -393,7 +397,9 @@ void display_3Temp(float amb_Temp, float board_Temp){
   }
 
   
-
+/*
+Function that takes ten float variables of votlage and current and changes LED color based on value
+*/
 void LEDs(float voltage1, float current1, float voltage2, float current2, float voltage3, float current3, float voltage4, float current4, float voltage5, float current5){
   //rail 1: 3.3V @ 0.5A
    if((voltage1 >= 3.135) && (voltage1 <= 3.465)) //if measured voltage value is within 5% of 3.3V
@@ -503,7 +509,9 @@ void LEDs(float voltage1, float current1, float voltage2, float current2, float 
   
    FastLED.show();
   }
-
+/*
+Function that takes four float variables of votlage and current and changes LED color based on value
+*/
 void LEDs2(float voltage1, float current1, float voltage2, float current2){
 //rail 6: 0-12V @ 1A
    if((voltage1 >= 0.01) && (voltage1 <= 12.2)) //if measured voltage value is within 5% of 3.3V
@@ -548,18 +556,22 @@ void LEDs2(float voltage1, float current1, float voltage2, float current2){
    FastLED.show();
 }
 
-// Ambient Sensor (1) Function 
-// request ambient temp and returns as float
-// can remove serial print funcs for final prep
+/* 
+Ambient Sensor (1) Function 
+request ambient temp and returns as float
+can remove serial print funcs for final prep 
+*/
 float sensor1(){
   DS18B20_Sensor.requestTemperatures(); // request temp1 data
   float temp1 = DS18B20_Sensor.getTempCByIndex(0); // 0 refers to first IC on wire - can have multiple DS18B20 on same bus
   return temp1;
 }
 
-// Onboard Sensor (2) Function
-// request pcb temp and returns as float
-// can remove serial print functions for final prep
+/* 
+Onboard Sensor (2) Function
+request pcb temp and returns as float 
+can remove serial print functions for final prep 
+*/
 float sensor2(){
   TCA9548A(2);
   Wire.beginTransmission(DS1621_sensor);  // connect to sensor
@@ -643,18 +655,24 @@ void continuous(float temp1, float temp2){
       else //both temps are below threshold
         noTone(buzzer); // stop beeping
 }
-
+/*
+Function that monitors when the current of the first 0-12 [V]
+rail is above 1 amp. If it is then it opens the relay until someone pushes the button
+connected to RESET pin.
+*/
 void latch(float current){
 
-  Reset = digitalRead(RESET);
-  
+  Reset = digitalRead(RESET); //Check RESET pin if it has been pushed
+
+  //Set Set variable to zero if current less than specified value
   if(current < 10.00){ 
     Set = 0;
     }
-    
+  //Set Set variable to one if current is more than specified value  
   else if(current >= 10.00){
     Set = 1;
     }
+  // Print to serial monitor for debugging purposes
   Serial.print("Set: ");
   Serial.println(Set);
   Serial.print("Reset: ");
@@ -668,18 +686,25 @@ void latch(float current){
    digitalWrite(COIL, LOW);} // Turn off coil if current is too high and reset is pressed
   
   }
-
+/*
+Function that monitors when the current of the second 0-12 [V]
+rail is above 1 amp. If it is then it opens the relay until someone pushes the button
+connected to RESET2 pin.
+*/
 void latch2(float current){
-
-  Reset = digitalRead(RESET2);
   
+  Reset = digitalRead(RESET2); //Check RESET2 pin if it has been pushed
+  
+  //Set Set variable to zero if current less than specified value
   if(current < 10.00){ 
     Set = 0;
     }
-    
+
+  //Set Set variable to one if current is more than specified value 
   else if(current >= 10.00){
     Set = 1;
     }
+  // Print to serial monitor for debugging purposes 
   Serial.print("Set: ");
   Serial.println(Set);
   Serial.print("Reset: ");
