@@ -7,10 +7,11 @@
 #include <FastLED.h>            // LED library
 #define LED_PIN   32            // Declare LED_PIN as pin 32
 #define num_LED   14            // Declare the number of LEDs as 14
-#define COIL 27                 // Declare COIL as pin 27
-#define RESET                   // Declare LED_PIN as pin 32
-#define COIL2 30                // Declare LED_PIN as pin 32
-#define RESET2 36               // Declare LED_PIN as pin 32
+#define COIL 30                 // Declare COIL as pin 30
+#define RESET 0                  // Declare RESET as pin 0
+#define COIL2 31                // Declare COIL2 as pin 31
+#define RESET2 1               // Declare RESET as pin 1
+#define WIRELESS 4
 #define TCAADDR 0x70            // Address for I2C multiplexor
 #define SCREEN_WIDTH 128        // Width of OLED display
 #define SCREEN_HEIGHT 64        // Height of OLED display
@@ -53,7 +54,7 @@ CRGB leds[num_LED]; // Define array for LEDs in strip
   float shunt_Current2[] = {0.00, 0.00, 0.00}; // Contains current for all three 5 [V] rails 
   float shunt_Current3[] = {0.00, 0.00}; // Contains current for both 0-12 [V] rails
 
-  const int buzzer = 10; //buzzer on digital pin 10
+  const int buzzer = 2; //buzzer on digital pin 10
   int WarnOne_A = 0; //Used to stop warning beep one from repeating with Ambient sensor
   int WarnOne_C = 0; //Used to stop warning beep one from repeating with Onboard sensor
   int WarnTwo_A = 0; //Used to stop warning beep two from repeating with Ambient sensor
@@ -68,23 +69,22 @@ Setup function that initilize all pins and displays
 void setup() {
     
     Wire.begin(); // Begin I2C communications
+    Serial.begin(115200);
+
+    analogReadResolution(12);
     
-    pinMode(0, OUTPUT); // Set pin 0 as an output
-    digitalWrite(0, HIGH); // Set pin 0 high
-    pinMode(1, OUTPUT); // Set pin 1 as an output
-    digitalWrite(1, HIGH); // Set pin 1 high
-    pinMode(2, OUTPUT); // Set pin 2 as an output
-    digitalWrite(2, HIGH); // Set pin 2 high
-    pinMode(3, OUTPUT); // Set pin 3 as an output
-    digitalWrite(3, HIGH); // Set pin 3 high
-   
-    pinMode(RESET, INPUT);  // Set RESET pin as an input
+    pinMode(35, OUTPUT);
+    digitalWrite(35, HIGH);
+    pinMode(34, OUTPUT);
+    digitalWrite(34, HIGH);
+    pinMode(33, OUTPUT);
+    digitalWrite(33, HIGH);
+    
+    pinMode(WIRELESS, OUTPUT);
+    pinMode(RESET, INPUT_PULLDOWN);  // Set RESET pin as an input
     pinMode(COIL, OUTPUT);  // Set COIL pin as an output
-    pinMode(RESET2, INPUT); // Set RESET2 pin as an input
+    pinMode(RESET2, INPUT_PULLDOWN); // Set RESET2 pin as an input
     pinMode(COIL2, OUTPUT); // Set COIL2 as an output
-    
-    pinMode(31, OUTPUT); // Set pin 31 as an output
-    digitalWrite(31, HIGH); // Set pin 31 high
     
     pinMode(buzzer, OUTPUT);    // set up pin as output for beeper
 
@@ -154,34 +154,34 @@ Main function that calls all other functions and loops until the microcontroller
 is pressed or power to the microcontroller is turned off
 */
 void loop() {
-    v_Source1[0] = readVoltage(A0, v_Resistance1[0], v_Resistance1[1]); // Call readVoltage function with parameters for the 3.3 [V] rail and set equal to v_Source1[0]
-    v_Source2[0] = readVoltage(A7, 1482.00, 980.00); // Call readVoltage function with parameters for the 5 [V] rail and set equal to v_Source2[0]
-    v_Source3[0] = readVoltage(A9, 1483.00, 4590.00); // Call readVoltage function with parameters for the 0-12 [V] rail and set equal to v_Source3[0]
+    v_Source1[0] = readVoltage(A0, 1000.00, 100.00); // Call readVoltage function with parameters for the 3.3 [V] rail and set equal to v_Source1[0]
+    v_Source2[0] = readVoltage(A7, 1500.00, 1000.00); // Call readVoltage function with parameters for the 5 [V] rail and set equal to v_Source2[0]
+    v_Source3[0] = readVoltage(A12, 1483.00, 4590.00); // Call readVoltage function with parameters for the 0-12 [V] rail and set equal to v_Source3[0]
     
-    v_Source1[1] = readVoltage(A10, 985.00, 99.1); // Call readVoltage function with parameters for the 3.3 [V] rail and set equal to v_Source1[1]
-    v_Source2[1] = readVoltage(A14, 1472.00, 995.00); // Call readVoltage function with parameters for the 5 [V] rail and set equal to v_Source2[1]
-    v_Source3[1] = readVoltage(A17, 1480.00, 4600.00); // Call readVoltage function with parameters for the 0-12 [V] rail and set equal to v_Source3[1]
+    v_Source1[1] = readVoltage(A2, 1000.00, 100.00); // Call readVoltage function with parameters for the 3.3 [V] rail and set equal to v_Source1[1]
+    v_Source2[1] = readVoltage(A14, 1500.00, 1000.00); // Call readVoltage function with parameters for the 5 [V] rail and set equal to v_Source2[1]
+    v_Source3[1] = readVoltage(A10, 3600.00, 10800.00); // Call readVoltage function with parameters for the 0-12 [V] rail and set equal to v_Source3[1]
     
-    v_Source2[2] = readVoltage(A11, 1471.00, 993.00); // Call readVoltage function with parameters for the 5 [V] rail and set equal to v_Source2[2]
+    v_Source2[2] = readVoltage(A16, 1500.00, 1000.00); // Call readVoltage function with parameters for the 5 [V] rail and set equal to v_Source2[2]
     
-    shunt_Current1[0] = readCurrent(A1, 10.00, 1000.00, 10000.00, v_Source1[0]); // Call readCurrent function with parameters for the 3.3 [V] rail and set equal to shunt_Current1_1 
-    shunt_Current2[0] = readCurrent(A8, 10.00, 1000.00, 10000.00, v_Source2[0]); // Call readCurrent function with parameters for the 5 [V] rail and set equal to shunt_Current2_1
-    shunt_Current3[0] = readCurrent(A6, 4.80, 989.00, 9910.00, v_Source3[0]); // Call readCurrent function with parameters for the 0-12 [V] rail and set equal to shunt_Current3_1
+    shunt_Current1[0] = readCurrent(A1, 0.040, 100.00, 14900.00, v_Source1[0]); // Call readCurrent function with parameters for the 3.3 [V] rail and set equal to shunt_Current1_1 
+    shunt_Current2[0] = readCurrent(A8, 0.002, 100.00, 30000.00, v_Source2[0]); // Call readCurrent function with parameters for the 5 [V] rail and set equal to shunt_Current2_1
+    shunt_Current3[0] = readCurrent(A13, 0.050, 100.00, 5900.00, v_Source3[0]); // Call readCurrent function with parameters for the 0-12 [V] rail and set equal to shunt_Current3_1
     
-    shunt_Current1[1] = readCurrent(A16, 15.10, 989.00, 9950.00, v_Source1[1]); // Call readCurrent function with parameters for the 3.3 [V] rail and set equal to shunt_Current1_2 
-    shunt_Current2[1] = readCurrent(A2, 15.70, 992.00, 9970.00, v_Source2[1]); // Call readCurrent function with parameters for the 5 [V] rail and set equal to shunt_Current2_2
-    shunt_Current3[1] = readCurrent(A15, 15.40, 988.00, 10020.00, v_Source3[1]); // Call readCurrent function with parameters for the 0-12 [V] rail and set equal to shunt_Current3_2
+    shunt_Current1[1] = readCurrent(A3, 0.040, 100.00, 14900.00, v_Source1[1]); // Call readCurrent function with parameters for the 3.3 [V] rail and set equal to shunt_Current1_2 
+    shunt_Current2[1] = readCurrent(A15, 0.002, 100.00, 30000.00, v_Source2[1]); // Call readCurrent function with parameters for the 5 [V] rail and set equal to shunt_Current2_2
+    shunt_Current3[1] = readCurrent(A11, 0.050, 100.00, 5900.00, v_Source3[1]); // Call readCurrent function with parameters for the 0-12 [V] rail and set equal to shunt_Current3_2
     
-    shunt_Current2[2] = readCurrent(A3, 6.3, 993.00, 10000.00, v_Source2[2]); // Call readCurrent function with parameters for the 5 [V] rail and set equal to shunt_Current2_3
+    shunt_Current2[2] = readCurrent(A17, 0.002, 100.00, 30000.00, v_Source2[2]); // Call readCurrent function with parameters for the 5 [V] rail and set equal to shunt_Current2_3
 
     // Correction factor to the voltage of the load based on the shunt resistors voltage
-    v_Source1[0] = v_Source1[0] - (shunt_Current1[0] * (10.00)); 
-    v_Source2[0] = v_Source2[0] - (shunt_Current2[0] * (10.00));
-    v_Source3[0] = v_Source3[0] - (shunt_Current3[0] * (5.00));
-    v_Source1[1] = v_Source1[1] - (shunt_Current1[1] * (15.10));
-    v_Source2[1] = v_Source2[1] - (shunt_Current2[1] * (15.70));
-    v_Source3[1] = v_Source3[1] - (shunt_Current3[1] * (15.40));
-    v_Source2[2] = v_Source2[2] - (shunt_Current2[2] * (1.00));
+    v_Source1[0] = v_Source1[0] - (shunt_Current1[0] * (0.040)); 
+    v_Source2[0] = v_Source2[0] - (shunt_Current2[0] * (0.002));
+    v_Source3[0] = v_Source3[0] - (shunt_Current3[0] * (0.050));
+    v_Source1[1] = v_Source1[1] - (shunt_Current1[1] * (0.040));
+    v_Source2[1] = v_Source2[1] - (shunt_Current2[1] * (0.002));
+    v_Source3[1] = v_Source3[1] - (shunt_Current3[1] * (0.040));
+    v_Source2[2] = v_Source2[2] - (shunt_Current2[2] * (0.002));
     
     // LEDs function that changes the RGB LEDs based on voltage and current of a specific rail
     LEDs(v_Source1[0], shunt_Current1[0], v_Source2[0], shunt_Current2[0], v_Source3[0], shunt_Current3[0], v_Source1[1], shunt_Current1[1], v_Source2[1], shunt_Current2[1]);
@@ -251,7 +251,7 @@ float readVoltage(int pinNum, float R1, float R2){
      for(int i = 0; i < 50; i++){
       
         int R_digital = analogRead(pinNum); // Read digital value at that pin
-        float R_voltage = (R_digital * 3.3)/1023.0000; // Find the voltage at that pin based on read value
+        float R_voltage = (R_digital * 3.3)/4095.0000; // Find the voltage at that pin based on read value
         float divider = (R2 + R1)/R1; // Calculate the multiplier for the voltage divider equation
         V_source = (R_voltage)*(divider); // Calculate the source voltage based on the divider and the read voltage
         V_temp = V_temp + V_source;   
@@ -277,7 +277,7 @@ float readCurrent(int pinNum, float R_shunt, float R1, float R2, float voltage){
      for(int i = 0; i < 50; i++){
       
         int R_digital = analogRead(pinNum); // Read digital value at that pin
-        float R_voltage = (R_digital * 3.3)/1023.00; // Find the voltage at that pin based on read value
+        float R_voltage = (R_digital * 3.3)/4095.0000; // Find the voltage at that pin based on read value
         float V_shunt = R_voltage/(1+R2/R1); // Op amp non-inverting gain equation
         float shunt_Current = V_shunt/R_shunt ; // Calculate current based on Ohm's law
         I_temp = I_temp + shunt_Current;   
@@ -558,8 +558,7 @@ void LEDs2(float voltage1, float current1, float voltage2, float current2){
 
 /* 
 Ambient Sensor (1) Function 
-request ambient temp and returns as float
-can remove serial print funcs for final prep 
+request ambient temp and returns as float 
 */
 float sensor1(){
   DS18B20_Sensor.requestTemperatures(); // request temp1 data
@@ -590,7 +589,7 @@ void warning_One(float temp1, float temp2){
   if ((temp1 >= 70.0) && WarnOne_A == 0) //quick warning beep when ambient temp reaches 70.0 C
   {
     tone(buzzer, 1000); //beep
-    delay(1000); //keep beeping
+    delay(100); //keep beeping
     noTone(buzzer); // beeping stops
     WarnOne_A = 1; //prevents this from going off while temperature is lowering back below 70.0 C
   }
@@ -600,7 +599,7 @@ void warning_One(float temp1, float temp2){
   if ((temp2 >= 70.0) && WarnOne_C == 0) //quick warning beep when onboard temp reaches 70.0 C
   {
     tone(buzzer, 1200); //beep
-    delay(1000); //keep beeping
+    delay(100); //keep beeping
     noTone(buzzer); // beeping stops
     WarnOne_C = 1; //prevents this from going off while temperature is lowering back below 70.0 C
   }
@@ -615,11 +614,11 @@ void warning_Two(float temp1, float temp2){
   if ((temp1 >= 75.0) && WarnTwo_A == 0) //quick warning beep when ambient temp reaches 75.0 C
   {
     tone(buzzer, 2000); //beep one
-    delay(500); //keep beeping
+    delay(50); //keep beeping
     noTone(buzzer); //shut up
-    delay(250); //keep silent
+    delay(25); //keep silent
     tone(buzzer, 2000); //beep two
-    delay(500); //keep beeping
+    delay(50); //keep beeping
     noTone(buzzer); //shut up
     WarnTwo_A = 1; //prevents this from going off while temperature is lowering back below 75.0 C 
   }
@@ -629,11 +628,11 @@ void warning_Two(float temp1, float temp2){
   if ((temp2 >= 75.0) && WarnTwo_C == 0) //quick warning beep when onboard temp reaches 75.0 C
   {
     tone(buzzer, 2200); //beep one
-    delay(500); //keep beeping
+    delay(50); //keep beeping
     noTone(buzzer); //shut up
-    delay(250); //keep silent
+    delay(25); //keep silent
     tone(buzzer, 2200); //beep two
-    delay(500); //keep beeping
+    delay(50); //keep beeping
     noTone(buzzer); //shut up
     WarnTwo_C = 1; //prevents this from going off while temperature is lowering back below 75.0 C 
   }
@@ -648,9 +647,9 @@ void continuous(float temp1, float temp2){
   if (temp1 >= 80.0 || temp2 >= 80.0) //if either measured temp is above 80.0 C     
   {
     tone(buzzer, 2400); //scream
-    delay(450); //keep screaming
+    delay(45); //keep screaming
     noTone(buzzer); // stop beeping
-    delay(450); // no beepng
+    delay(45); // no beepng
   }
       else //both temps are below threshold
         noTone(buzzer); // stop beeping
